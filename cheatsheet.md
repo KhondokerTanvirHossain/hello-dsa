@@ -1,6 +1,7 @@
 # DSA Cheat-Sheet
 
 > Dense quick reference. Scan before every problem. Re-read before every mock interview.
+> Last updated: end of HashMap unit (6 problems completed).
 
 ---
 
@@ -42,7 +43,8 @@
    - Max N? (sets complexity budget)
    - Value range / character set? (bounded → array; unbounded → HashMap)
    - Duplicates allowed? Sorted?
-   - Output: boolean / indices / value?
+   - Two inputs: equal lengths? Case-sensitive? Output format?
+   - **State hypothesis with question** when natural: *"Empty input → return true since two empty are anagrams. Confirm?"*
 
 Then: brute force → optimized → code → trace.
 
@@ -53,36 +55,79 @@ Then: brute force → optimized → code → trace.
 **Signature:** searching inside a loop → HashMap is the first hypothesis.
 **Rule:** what you look up *fast* must be the **key**.
 
-### Two Sum (boolean)
+### Subpatterns
+
+| Subpattern                  | Example                       |
+|-----------------------------|-------------------------------|
+| Fast lookup                 | Two Sum                       |
+| Stale-state overwrite       | Contains Nearby Duplicate     |
+| Window state                | Longest Substring No Repeat   |
+| Group-by-signature          | Group Anagrams                |
+| Frequency array fingerprint | Group Anagrams, Valid Anagram |
+| Increment/decrement trick   | Valid Anagram, Ransom Note    |
+
+### Two Sum (existence)
 
 ```java
-boolean hasTwoSum(int[] nums, int target) {
-    Map<Integer, Integer> seen = new HashMap<>();
-    for (int i = 0; i < nums.length; i++) {
-        int complement = target - nums[i];
-        if (seen.containsKey(complement)) return true;
-        seen.put(nums[i], i);
-    }
-    return false;
+Map<Integer, Integer> seen = new HashMap<>();
+for (int i = 0; i < nums.length; i++) {
+    int complement = target - nums[i];
+    if (seen.containsKey(complement)) return true;
+    seen.put(nums[i], i);
 }
+return false;
 ```
 
-**Order rule:** check first, then put. Map only contains elements *already seen*.
+**Order rule:** check first, then put.
 
-### Contains Nearby Duplicate (stale-index lesson)
+### Contains Nearby Duplicate (stale overwrite)
 
 ```java
-boolean containsNearbyDuplicate(int[] nums, int k) {
-    Map<Integer, Integer> seen = new HashMap<>();
-    for (int i = 0; i < nums.length; i++) {
-        if (seen.containsKey(nums[i]) && i - seen.get(nums[i]) <= k) return true;
-        seen.put(nums[i], i);   // overwrite — stale indices are useless
-    }
-    return false;
+Map<Integer, Integer> seen = new HashMap<>();
+for (int i = 0; i < nums.length; i++) {
+    if (seen.containsKey(nums[i]) && i - seen.get(nums[i]) <= k) return true;
+    seen.put(nums[i], i);   // always overwrite — stale indices useless
 }
+return false;
 ```
 
-**Lesson:** when a stored entry can no longer help future queries, overwrite with the fresher one.
+### Group Anagrams (group-by-signature)
+
+```java
+Map<String, List<String>> groups = new HashMap<>();
+for (String s : strs) {
+    int[] count = new int[26];
+    for (int j = 0; j < s.length(); j++) count[s.charAt(j) - 'a']++;
+    StringBuilder kb = new StringBuilder();
+    for (int c : count) kb.append(c).append('#');
+    groups.computeIfAbsent(kb.toString(), k -> new ArrayList<>()).add(s);
+}
+return new ArrayList<>(groups.values());
+```
+
+### Valid Anagram (single-array +/-)
+
+```java
+if (s.length() != t.length()) return false;
+int[] count = new int[26];
+for (int i = 0; i < s.length(); i++) {
+    count[s.charAt(i) - 'a']++;
+    count[t.charAt(i) - 'a']--;
+}
+for (int c : count) if (c != 0) return false;
+return true;
+```
+
+### Ransom Note (count then subtract)
+
+```java
+int[] count = new int[26];
+for (int i = 0; i < magazine.length(); i++) count[magazine.charAt(i) - 'a']++;
+for (int i = 0; i < ransomNote.length(); i++) {
+    if (--count[ransomNote.charAt(i) - 'a'] < 0) return false;
+}
+return true;
+```
 
 ### Variants
 
@@ -91,12 +136,15 @@ boolean containsNearbyDuplicate(int[] nums, int k) {
 | Existence only  | `Set<T>`                   | Don't care about index or count            |
 | Value → index   | `Map<T, Integer>`          | Need *where* you saw it                    |
 | Frequency map   | `Map<T, Integer>`          | Counting (anagrams, majority, k-distinct)  |
+| Frequency array | `int[26]` / `int[128]`     | Bounded set — faster than HashMap          |
 | Prefix-sum map  | `Map<Long, Integer>`       | Subarray-sum problems                      |
 
 ### Traps
 
 - `containsValue()` is **O(N)**. Never use inside a loop.
 - Autoboxing cost: for bounded character sets, prefer `int[26]` / `int[128]`.
+- `c - 'a'` (not `'a' - c`). Test on `'b' - 'a' = 1`.
+- Verify length-relationship assumptions before using them.
 
 ---
 
@@ -130,19 +178,17 @@ int slidingWindow(int[] arr) {
 ### Canonical — Longest Substring Without Repeating Characters
 
 ```java
-int lengthOfLongestSubstring(String s) {
-    int left = 0, maxLength = 0;
-    Set<Character> seen = new HashSet<>();
-    for (int right = 0; right < s.length(); right++) {
-        while (seen.contains(s.charAt(right))) {
-            seen.remove(s.charAt(left));
-            left++;
-        }
-        seen.add(s.charAt(right));
-        maxLength = Math.max(maxLength, right - left + 1);
+int left = 0, maxLength = 0;
+Set<Character> seen = new HashSet<>();
+for (int right = 0; right < s.length(); right++) {
+    while (seen.contains(s.charAt(right))) {
+        seen.remove(s.charAt(left));
+        left++;
     }
-    return maxLength;
+    seen.add(s.charAt(right));
+    maxLength = Math.max(maxLength, right - left + 1);
 }
+return maxLength;
 ```
 
 ### Complexity argument (say this aloud)
@@ -154,16 +200,14 @@ int lengthOfLongestSubstring(String s) {
 ## Two pointers — sorted convergence template
 
 ```java
-boolean hasPairWithSum(int[] sortedNums, int target) {
-    int left = 0, right = sortedNums.length - 1;
-    while (left < right) {
-        int sum = sortedNums[left] + sortedNums[right];
-        if (sum == target) return true;
-        if (sum < target) left++;
-        else right--;
-    }
-    return false;
+int left = 0, right = sortedNums.length - 1;
+while (left < right) {
+    int sum = sortedNums[left] + sortedNums[right];
+    if (sum == target) return true;
+    if (sum < target) left++;
+    else right--;
 }
+return false;
 ```
 
 Each step eliminates at least one position. → O(N) after sorting.
@@ -180,8 +224,11 @@ Each step eliminates at least one position. → O(N) after sorting.
 | Always braces                                 | even on single-line `if`                        |
 | Meaningful names                              | `seen`, `complement`, `frequencies`             |
 | No shadowing                                  | `for(i...) for(j...)` — never reuse `i`         |
-| `Math.max(a, b)` for running max              | one line, idiomatic                             |
-| `getOrDefault` for sentinel lookup            | one map call instead of two                     |
+| `Math.max(a, b)`                              | one line, idiomatic running max                 |
+| `getOrDefault(k, -1)`                         | one map call instead of two                     |
+| `computeIfAbsent(k, k -> new ArrayList<>())`  | get-or-create-then-update, single call          |
+| `--count[c - 'a'] < 0`                        | decrement-then-check, counting problems         |
+| For-each when index not needed                | `for (String s : strs)`                         |
 | Comments explain *why*, not *what*            | no `// increment i`                             |
 
 ---
@@ -196,16 +243,12 @@ i = 0: nums[0] = 1
        j = -1, skip
        seen = {1: 0}
 
-i = 1: nums[1] = 0
-       j = -1, skip
-       seen = {1: 0, 0: 1}
-
 i = 2: nums[2] = 1
-       j = 0, i - j = 2, 2 <= 1? NO
+       j = 0, i - j = 2 - 0 = 2.  2 <= 1? NO
        seen = {1: 2, 0: 1}   (overwrite)
 
 i = 3: nums[3] = 1
-       j = 2, i - j = 1, 1 <= 1? YES
+       j = 2, i - j = 3 - 2 = 1.  1 <= 1? YES
        return true ✓
 ```
 
@@ -214,52 +257,87 @@ i = 3: nums[3] = 1
 - Show data structure state at every step.
 - Show non-updates too.
 - Pick examples that exercise the tricky path.
+- **Internal consistency check** — top-to-bottom read before sending:
+  - If you write `'r'`, the next line must subtract `'r'`, not `'a'`.
+  - If you write `++`, the result must go up. If `--`, down.
 
 ---
 
 ## Communication phrases (speak aloud daily)
 
-**Complexity justification:**
+**Complexity (always both time AND space):**
+- *"Time: O(N), space: O(1) since alphabet size is constant."*
 - *"For each of N elements, I do O(1) work, so total is O(N)."*
 - *"Each pointer moves at most N times total — amortized O(N)."*
 - *"Sort dominates: O(N log N) for sort plus O(N) for scan."*
 
+**Clarifying with hypothesis:**
+- *"Empty input — I'd return true. Confirm?"*
+
 **Tradeoffs:**
-- *"I'm trading O(N) memory for O(N) time vs. O(N²) brute force."*
-- *"Lowercase-only would let me use int[26] instead of a HashMap — faster, no boxing."*
+- *"I could use two arrays then compare, but the increment/decrement trick does it in one pass."*
+- *"Sorting each string also works but is O(K log K) per string vs. O(K) for the count-based key."*
 
 **Borderline:**
 - *"N³ with N=1000 is 10⁹ ops — borderline. C++ fine, Java may TLE."*
 
 **Stuck:**
 - *"Let me think about what information I'm recomputing that I already have."*
-- *"Can I ask a clarifying question to narrow this?"*
 
 **Never** go silent > 30 seconds. Narrate partial thinking.
 
 ---
 
-## Code self-review checklist (before declaring done)
+## Code self-review checklist (60 seconds before declaring done)
 
 - [ ] Read problem one more time. Match every constraint.
+- [ ] Read code as if it were a junior's PR:
+  - [ ] Anything doing nothing? (redundant `if` around `while`, double map lookup)
+  - [ ] Could two lines collapse? (`computeIfAbsent`, `Math.max`)
+  - [ ] Arithmetic/indexing expression untested? (`'a' - c` direction, off-by-one)
 - [ ] Trace on the given example. Compute arithmetic explicitly.
-- [ ] Trace on **one adversarial case** you invented (duplicates, empty, single, all-same, edges).
-- [ ] Re-read code as if it were a junior's PR. Anything redundant? Over-nested? Two lines collapsible into one?
-- [ ] State the complexity in work-done terms. Justify it aloud.
+- [ ] Trace on **one adversarial case** you invented (duplicates, empty, single, all-same).
+- [ ] Trace internal consistency: characters and operators in the trace match across lines.
+- [ ] State complexity in work-done terms, **both time AND space**.
 
 ---
 
 ## My recurring mistakes (update weekly)
 
+### Comprehension
 - [ ] Misreading operators (`≤` vs `=`)
 - [ ] Substring / subsequence confusion
-- [ ] `maxLegth` and similar typos
+- [ ] Voice-dictating without proofreading
+
+### Algorithm
+- [ ] Stale state — forget to overwrite
+- [ ] Unverified length assumptions (longer/shorter)
+- [ ] Tangled single loop over different-length collections
+
+### Code style
+- [ ] Typos: `maxLegth`, `length`, `doesn't`
+- [ ] Character offset inversion: `'a' - char` instead of `char - 'a'`
 - [ ] `containsValue()` instead of `containsKey()`
-- [ ] Hedging on self-evaluation ("one or two")
-- [ ] Skipping the trace when code "looks right"
+- [ ] Verbose put-or-create instead of `computeIfAbsent`
 - [ ] Redundant `if` wrapping a `while`
 
+### Trace
+- [ ] Trace shorthand drift (notation doesn't match code)
+- [ ] Operator/character mislabeling (write `++`, result goes down)
+
+### Communication
+- [ ] Skipping space complexity
+- [ ] Hedging on self-evaluation
+
 *(add new ones as discovered)*
+
+---
+
+## Self-eval format (use after every problem)
+
+> *"Caught: [integer]. What I'd need to start catching: [specific habit]."*
+
+Pure "no" or "zero" without a diagnostic action is wasted self-eval.
 
 ---
 
